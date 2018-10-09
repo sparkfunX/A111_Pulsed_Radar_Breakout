@@ -1,12 +1,13 @@
-BUILD_ALL += out/sparkx_envelope_service_example
+BUILD_ALL += utils/acc_streaming_server_rpi_sparkx
 
-out/sparkx_envelope_service_example : \
-					out/example_service_envelope.o \
+utils/acc_streaming_server_rpi_sparkx : \
+					acc_streaming_server.o \
+					cJSON.o \
 					libacconeer.a \
 					libacconeer_a111_r2c.a \
 					out/libcustomer.a \
 					libacc_service.a \
 					out/acc_board_rpi_sparkx.o
 	@echo "    Linking $(notdir $@)"
-	@mkdir -p out
+	@mkdir -p utils
 	@$(LINK.o) -Wl,--start-group $^ -Wl,--end-group $(LOADLIBES) $(LDLIBS) -o $@
