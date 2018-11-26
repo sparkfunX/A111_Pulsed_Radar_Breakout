@@ -5,9 +5,9 @@ utils/acc_streaming_server_rpi_sparkx : \
 					cJSON.o \
 					libacconeer.a \
 					libacconeer_a111_r2c.a \
-					out/libcustomer.a \
+					libcustomer.a \
 					libacc_service.a \
-					out/acc_board_rpi_sparkx.o
+					$(OUT_OBJ_DIR)/acc_board_rpi_sparkx.o
 	@echo "    Linking $(notdir $@)"
-	@mkdir -p utils
-	@$(LINK.o) -Wl,--start-group $^ -Wl,--end-group $(LOADLIBES) $(LDLIBS) -o $@
+	$(SUPPRESS)mkdir -p utils
+	$(SUPPRESS)$(LINK.o) -Wl,--start-group $^ -Wl,--end-group $(LOADLIBES) $(LDLIBS) -o $@

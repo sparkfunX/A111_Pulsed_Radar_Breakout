@@ -7,19 +7,20 @@
 
 #include "acc_board.h"
 #include "acc_device_gpio.h"
-#include "acc_driver_gpio_linux_sysfs.h"
-#include "acc_driver_spi_linux_spidev.h"
-#include "acc_log.h"
 #include "acc_device_os.h"
 #include "acc_device_spi.h"
+#include "acc_driver_gpio_linux_sysfs.h"
 #include "acc_driver_os_linux.h"
+#include "acc_driver_spi_linux_spidev.h"
+#include "acc_log.h"
+
 
 /**
  * @brief The module name
  *
  * Must exist if acc_log.h is used.
  */
-#define MODULE		"acc_board_rpi_sparkx"
+#define MODULE		"acc_board_rpi_sparkx-3_r1c"
 
 /**
  * @brief The number of sensors available on the board
@@ -53,8 +54,7 @@
 /**
  * @brief The SPI speed of this board
  */
-//#define ACC_BOARD_SPI_SPEED	15000000
-#define ACC_BOARD_SPI_SPEED	1000000
+#define ACC_BOARD_SPI_SPEED	15000000
 
 /**
  * @brief The SPI bus all sensors are using
@@ -87,9 +87,11 @@ static const uint_fast8_t sensor_interrupt_pins[SENSOR_COUNT] = {
 	GPIO0_PIN
 };
 
-static acc_board_isr_t master_isr;
 
-static void isr_sensor1(void)  { if (master_isr) master_isr(1); }
+static acc_board_isr_t master_isr;
+static acc_device_handle_t spi_handle;
+
+static void isr_sensor1(void) {if (master_isr) master_isr(1);}
 
 
 /**
@@ -131,8 +133,7 @@ acc_status_t acc_board_gpio_init(void)
 	if (
 		(status = acc_device_gpio_set_initial_pull(GPIO0_PIN, 0)) ||
 		(status = acc_device_gpio_set_initial_pull(RSTn_PIN, 1)) ||
-		(status = acc_device_gpio_set_initial_pull(ENABLE_PIN, 0))// ||
-		//(status = acc_device_gpio_set_initial_pull(CE_PIN, 1))
+		(status = acc_device_gpio_set_initial_pull(ENABLE_PIN, 0))
 	) {
 		ACC_LOG_WARNING("%s: failed to set initial pull with status: %s", __func__, acc_log_status_name(status));
 	}
@@ -140,8 +141,7 @@ acc_status_t acc_board_gpio_init(void)
 	if (
 		(status = acc_device_gpio_input(GPIO0_PIN)) ||
 		(status = acc_device_gpio_write(RSTn_PIN, 0)) ||
-		(status = acc_device_gpio_write(ENABLE_PIN, 0))// ||
-		//(status = acc_device_gpio_write(CE_PIN, 1))
+		(status = acc_device_gpio_write(ENABLE_PIN, 0))
 	) {
 		ACC_LOG_ERROR("%s failed with %s", __func__, acc_log_status_name(status));
 		acc_os_mutex_unlock(init_mutex);
@@ -176,6 +176,17 @@ acc_status_t acc_board_init(void)
 
 	acc_driver_gpio_linux_sysfs_register(28);
 	acc_driver_spi_linux_spidev_register();
+
+	acc_device_gpio_init();
+
+	acc_device_spi_configuration_t configuration;
+	configuration.bus 		= ACC_BOARD_BUS;
+	configuration.configuration 	= NULL;
+	configuration.device 		= ACC_BOARD_CS;
+	configuration.master 		= true;
+	configuration.speed 		= ACC_BOARD_SPI_SPEED;
+
+	spi_handle = acc_device_spi_create(&configuration);
 
 	for (uint_fast8_t sensor_index = 0; sensor_index < SENSOR_COUNT; sensor_index++) {
 		sensor_state[sensor_index] = SENSOR_STATE_UNKNOWN;
@@ -232,6 +243,9 @@ acc_status_t acc_board_start_sensor(acc_sensor_t sensor)
 			return status;
 		}
 
+		// Wait for PMU to stabilize
+		acc_os_sleep_us(5000);
+
 		status = acc_device_gpio_write(ENABLE_PIN, 1);
 		if (status != ACC_STATUS_SUCCESS) {
 			ACC_LOG_ERROR("Unable to activate ENABLE");
@@ -282,41 +296,10 @@ acc_status_t acc_board_stop_sensor(acc_sensor_t sensor)
 }
 
 
-void acc_board_get_spi_bus_cs(acc_sensor_t sensor, uint_fast8_t *bus, uint_fast8_t *cs)
-{
-	if ((sensor <= 0) || (sensor > SENSOR_COUNT)) {
-		*bus = -1;
-		*cs  = -1;
-	} else {
-		*bus = ACC_BOARD_BUS;
-		*cs  = ACC_BOARD_CS;
-	}
-}
-
-
 acc_status_t acc_board_chip_select(acc_sensor_t sensor, uint_fast8_t cs_assert)
 {
 	ACC_UNUSED(sensor);
 	ACC_UNUSED(cs_assert);
-	/*acc_status_t status;
-
-	if (cs_assert) {
-		uint_fast8_t cea_val = (sensor == 1 || sensor == 2) ? 0 : 1;
-		uint_fast8_t ceb_val = (sensor == 1 || sensor == 3) ? 0 : 1;
-
-		if (
-			(status = acc_device_gpio_write(CE_A_PIN, cea_val)) ||
-			(status = acc_device_gpio_write(CE_B_PIN, ceb_val))
-		) {
-			ACC_LOG_ERROR("%s failed with %s", __func__, acc_log_status_name(status));
-			return status;
-		}
-		status = acc_device_gpio_write(CE_PIN, 0);
-		if (status) {
-			ACC_LOG_ERROR("%s failed with %s", __func__, acc_log_status_name(status));
-			return status;
-		}		
-	}*/
 
 	return ACC_STATUS_SUCCESS;
 }
@@ -332,7 +315,7 @@ bool acc_board_is_sensor_interrupt_connected(acc_sensor_t sensor)
 {
 	ACC_UNUSED(sensor);
 
-	return false;
+	return true;
 }
 
 
@@ -384,17 +367,38 @@ float acc_board_get_ref_freq(void)
 }
 
 
-uint32_t acc_board_get_spi_speed(uint_fast8_t bus)
-{
-	ACC_UNUSED(bus);
-
-	return ACC_BOARD_SPI_SPEED;
-}
-
-
 acc_status_t acc_board_set_ref_freq(float ref_freq)
 {
 	ACC_UNUSED(ref_freq);
 
 	return ACC_STATUS_UNSUPPORTED;
+}
+
+
+acc_status_t acc_board_sensor_transfer(acc_sensor_t sensor_id, uint8_t *buffer, size_t buffer_length)
+{
+		acc_status_t status;
+		uint_fast8_t bus = acc_device_spi_get_bus(spi_handle);
+
+		acc_device_spi_lock(bus);
+
+		if ((status = acc_board_chip_select(sensor_id, 1))) {
+			ACC_LOG_ERROR("%s failed with %s", __func__, acc_log_status_name(status));
+			acc_device_spi_unlock(bus);
+			return status;
+		}
+
+		if ((status = acc_device_spi_transfer(spi_handle, buffer, buffer_length))) {
+			acc_device_spi_unlock(bus);
+			return status;
+		}
+
+		if ((status = acc_board_chip_select(sensor_id, 0))) {
+			acc_device_spi_unlock(bus);
+			return status;
+		}
+
+		acc_device_spi_unlock(bus);
+
+		return status;
 }

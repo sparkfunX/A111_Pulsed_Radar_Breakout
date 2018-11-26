@@ -8,7 +8,7 @@
 #include <signal.h>
 
 #include "acc_detector_distance_peak.h"
-#include "acc_os.h"
+//#include "acc_os.h"
 #include "acc_rss.h"
 #include "acc_sweep_configuration.h"
 #include "acc_types.h"

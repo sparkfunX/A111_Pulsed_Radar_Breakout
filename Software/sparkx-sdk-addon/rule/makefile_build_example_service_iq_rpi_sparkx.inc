@@ -1,12 +1,12 @@
-BUILD_ALL += out/sparkx_envelope_iq_example
+BUILD_ALL += $(OUT_DIR)/sparkx_envelope_iq_example
 
-out/sparkx_envelope_iq_example : \
-					out/example_service_iq.o \
+$(OUT_DIR)/sparkx_envelope_iq_example : \
+					$(OUT_OBJ_DIR)/example_service_iq.o \
 					libacconeer.a \
 					libacconeer_a111_r2c.a \
-					out/libcustomer.a \
+					libcustomer.a \
 					libacc_service.a \
-					out/acc_board_rpi_sparkx.o
+					$(OUT_OBJ_DIR)/acc_board_rpi_sparkx.o
 	@echo "    Linking $(notdir $@)"
-	@mkdir -p out
-	@$(LINK.o) -Wl,--start-group $^ -Wl,--end-group $(LOADLIBES) $(LDLIBS) -o $@
+	$(SUPPRESS)mkdir -p $(OUT_DIR)
+	$(SUPPRESS)$(LINK.o) -Wl,--start-group $^ -Wl,--end-group $(LOADLIBES) $(LDLIBS) -o $@
