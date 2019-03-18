@@ -13,6 +13,16 @@ Our breakout board for the A111 includes a 1.8V regulator, voltage-level transla
 
 The breakout board is primarily **designed to interface directly with a Raspberry Pi** – Acconeer’s SDK currently only supports ARMv7’s (e.g. a Pi) and ARM Cortex-M4’s. Check out our <a href="https://learn.sparkfun.com/tutorials/using-the-a111-pulsed-radar-sensor-with-a-raspberry-pi">Using the A111 Pulsed Radar Breakout tutorial</a>, which explains how to use the sensor with a Raspberry Pi.
 
+**Update!**
+The tutorial describes the process for an older version of the
+Acconeer SDK that is nolonger available.
+
+New installation instructions:
+1. Download and unpack Acconeer SDK 1.7.0 for XC111
+2. Copy the `user_source` and `user_rule` folders from this repository to the root of the unpacked
+   SDK (folders `lib`, `source` and `rule` should be siblings to the
+   `user_rule`and `user_source`)
+
 SparkFun labored with love to create this code. Feel like supporting open source hardware? 
 Buy a [breakout board](https://www.sparkfun.com/products/14811) from SparkFun!
 
