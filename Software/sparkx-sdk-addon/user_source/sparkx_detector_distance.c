@@ -1,4 +1,4 @@
-// Copyright (c) Acconeer AB, 2018
+// Copyright (c) Acconeer AB, 2018-2019
 // All rights reserved
 
 #include <stddef.h>
@@ -8,10 +8,10 @@
 #include <signal.h>
 
 #include "acc_detector_distance_peak.h"
-//#include "acc_os.h"
+#include "acc_driver_hal.h"
 #include "acc_rss.h"
 #include "acc_sweep_configuration.h"
-#include "acc_types.h"
+//#include "acc_types.h"
 #include "acc_version.h"
 
 
@@ -31,51 +31,60 @@
  */
 
 
-#define FIXED_THRESHOLD_VALUE   (1500)
-#define SENSOR_ID               (1)
-#define RANGE_START_M           (0.2)
-#define RANGE_LENGTH_M          (0.5)
+#define FIXED_THRESHOLD_VALUE (1500)
+#define SENSOR_ID             (1)
+#define RANGE_START_M         (0.2f)
+#define RANGE_LENGTH_M        (0.5f)
 
 #define NUM_DISTANCE_DETECT           100
 #define NUM_DISTANCE_THRESHOLD_DETECT 100
 
+static acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls(
+	acc_detector_distance_peak_configuration_t distance_configuration);
 
-static acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls(acc_detector_distance_peak_configuration_t distance_configuration);
-static acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls_with_estimated_threshold(acc_detector_distance_peak_configuration_t distance_configuration);
-static char *format_distances(uint16_t reflection_count,
-			      const acc_detector_distance_peak_reflection_t *reflections,
-			      float sensor_offset);
+
+static acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls_with_estimated_threshold(
+	acc_detector_distance_peak_configuration_t distance_configuration);
+
+
+static char *format_distances(uint16_t                                      reflection_count,
+                              const acc_detector_distance_peak_reflection_t *reflections,
+                              float                                         sensor_offset);
+
+
 static void configure_detector(acc_detector_distance_peak_configuration_t distance_configuration);
-void waitForEnter(void);
+
 
 static uint8_t not_interrupted = 1;
 
-void exit_handler(int sig_num)
-{
-	ACC_UNUSED(sig_num);
-	printf("\nCtrl+C pressed. Beginning shutdown\n");
-	not_interrupted = 0;
-}
+void waitForEnter(void);
 
-int main(int argc, char *argv[])
-{
-	ACC_UNUSED(argc);
-	ACC_UNUSED(argv);
+void exit_handler(int sig_num);
 
+int main(void)
+{
 	acc_detector_distance_peak_status_t detector_status;
 
 	printf("Acconeer software version %s\n", ACC_VERSION);
 	printf("Acconeer RSS version %s\n", acc_rss_version());
 
-	//Initialize Radar Service System
-	if (!acc_rss_activate()) {
+	if (!acc_driver_hal_init())
+	{
+		return EXIT_FAILURE;
+	}
+
+	acc_hal_t hal = acc_driver_hal_get_implementation();
+
+	if (!acc_rss_activate_with_hal(&hal))
+	{
 		return EXIT_FAILURE;
 	}
 
 	//Create the detector configuration
 	acc_detector_distance_peak_configuration_t distance_configuration = acc_detector_distance_peak_configuration_create();
 
-	if (distance_configuration == NULL) {
+	if (distance_configuration == NULL)
+	{
 		printf("\nacc_service_distance_configuration_create() failed");
 		return EXIT_FAILURE;
 	}
@@ -105,6 +114,7 @@ int main(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
+
 acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls(acc_detector_distance_peak_configuration_t distance_configuration)
 {
 	acc_detector_distance_peak_status_t detector_status = ACC_DETECTOR_DISTANCE_PEAK_STATUS_SUCCESS;
@@ -118,6 +128,9 @@ acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls(acc
 
 	detector_status = acc_detector_distance_peak_set_threshold_mode_fixed(distance_configuration, FIXED_THRESHOLD_VALUE);
 
+	// Not sure if this should be done
+	// acc_detector_distance_peak_set_sort_by_amplitude(distance_configuration, true);
+
 	acc_detector_distance_peak_handle_t handle = acc_detector_distance_peak_create(distance_configuration);
 
 	if (handle == NULL) {
@@ -126,10 +139,10 @@ acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls(acc
 	}
 
 	acc_detector_distance_peak_get_metadata(handle, &metadata);
-	printf("Free space absolute offset: %u mm\n", (unsigned int)(metadata.free_space_absolute_offset * 1000.0 + 0.5));
-	printf("Actual start: %u mm\n", (unsigned int)(metadata.actual_start_m * 1000.0 + 0.5));
-	printf("Actual length: %u mm\n", (unsigned int)(metadata.actual_length_m * 1000.0 + 0.5));
-	printf("Actual end: %u mm\n", (unsigned int)((metadata.actual_start_m + metadata.actual_length_m) * 1000.0 + 0.5));
+	printf("Free space absolute offset: %u mm\n", (unsigned int)(metadata.free_space_absolute_offset * 1000.0f + 0.5f));
+	printf("Actual start: %u mm\n", (unsigned int)(metadata.actual_start_m * 1000.0f + 0.5f));
+	printf("Actual length: %u mm\n", (unsigned int)(metadata.actual_length_m * 1000.0f + 0.5f));
+	printf("Actual end: %u mm\n", (unsigned int)((metadata.actual_start_m + metadata.actual_length_m) * 1000.0f + 0.5f));
 	printf("\n");
 
 	acc_detector_distance_peak_result_info_t result_info;
@@ -155,8 +168,8 @@ acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls(acc
 				printf("Distance detector: Reflections: %u. Seq. nr: %u. (%u-%u mm): %s\n",
 				(unsigned int)reflection_count,
 				(unsigned int)result_info.sequence_number,
-				(unsigned int)(start_m * 1000.0 + 0.5),
-				(unsigned int)(end_m * 1000.0 + 0.5),
+				(unsigned int)(start_m * 1000.0f + 0.5f),
+				(unsigned int)(end_m * 1000.0f + 0.5f),
 				format_distances(reflection_count, reflections, metadata.free_space_absolute_offset));
 			}
 			else {
@@ -175,10 +188,10 @@ acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls(acc
 	acc_detector_distance_peak_destroy(&handle);
 
 	return detector_status;
-
 }
 
-acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls_with_estimated_threshold(acc_detector_distance_peak_configuration_t distance_configuration)
+acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls_with_estimated_threshold(
+	acc_detector_distance_peak_configuration_t distance_configuration)
 {
 	acc_detector_distance_peak_status_t detector_status = ACC_DETECTOR_DISTANCE_PEAK_STATUS_SUCCESS;
 	acc_detector_distance_peak_metadata_t metadata;
@@ -197,10 +210,10 @@ acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls_wit
 	}
 
 	acc_detector_distance_peak_get_metadata(handle, &metadata);
-	printf("Free space absolute offset: %u mm\n", (unsigned int)(metadata.free_space_absolute_offset * 1000.0 + 0.5));
-	printf("Actual start: %u mm\n", (unsigned int)(metadata.actual_start_m * 1000.0 + 0.5));
-	printf("Actual length: %u mm\n", (unsigned int)(metadata.actual_length_m * 1000.0 + 0.5));
-	printf("Actual end: %u mm\n", (unsigned int)((metadata.actual_start_m + metadata.actual_length_m) * 1000.0 + 0.5));
+	printf("Free space absolute offset: %u mm\n", (unsigned int)(metadata.free_space_absolute_offset * 1000.0f + 0.5f));
+	printf("Actual start: %u mm\n", (unsigned int)(metadata.actual_start_m * 1000.0f + 0.5f));
+	printf("Actual length: %u mm\n", (unsigned int)(metadata.actual_length_m * 1000.0f + 0.5f));
+	printf("Actual end: %u mm\n", (unsigned int)((metadata.actual_start_m + metadata.actual_length_m) * 1000.0f + 0.5f));
 	printf("\n");
 
 	acc_detector_distance_peak_result_info_t result_info;
@@ -209,13 +222,24 @@ acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls_wit
 	float end_m = metadata.actual_start_m + metadata.actual_length_m;
 
 	detector_status = acc_detector_distance_peak_set_threshold_mode_estimation(distance_configuration);
+	if (detector_status != ACC_DETECTOR_DISTANCE_PEAK_STATUS_SUCCESS)
+	{
+		printf("Setting threshold estimation mode failed.\n"); // unsure
+		return detector_status;
+	}
 
 	printf("Estimating threshold...\n");
 
 	detector_status = acc_detector_distance_peak_threshold_estimation_update(distance_configuration,
-										100,
-										metadata.actual_start_m,
-										metadata.actual_start_m + metadata.actual_length_m);
+	                                                                         100,
+	                                                                         metadata.actual_start_m,
+	                                                                         metadata.actual_start_m + metadata.actual_length_m);
+	if (detector_status != ACC_DETECTOR_DISTANCE_PEAK_STATUS_SUCCESS)
+	{
+		printf("Threshold estimation failed.\n"); // unsure
+		return detector_status;
+	}
+
 	printf("Estimating threshold done...\n");
 	printf("\nPress ENTER to measure threshold-ed distance\nThen press CTRL+C to STOP\n");
 	waitForEnter();
@@ -243,8 +267,8 @@ acc_detector_distance_peak_status_t distance_peak_detect_with_blocking_calls_wit
 					printf("Distance detector: Reflections: %u. Seq. nr: %u. (%u-%u mm): %s\n",
 					(unsigned int)reflection_count,
 					(unsigned int)result_info.sequence_number,
-					(unsigned int)(start_m * 1000.0 + 0.5),
-					(unsigned int)(end_m * 1000.0 + 0.5),
+					(unsigned int)(start_m * 1000.0f + 0.5f),
+					(unsigned int)(end_m * 1000.0f + 0.5f),
 					format_distances(reflection_count, reflections, metadata.free_space_absolute_offset));
 				}
 				else {
@@ -287,8 +311,8 @@ char *format_distances(uint16_t reflection_count,
 		}
 
 		count = snprintf(&buffer[total_count], sizeof(buffer) - total_count, "%u mm (%u)",
-				(unsigned int)((reflections[reflection_index].distance - sensor_offset) * 1000.0 + 0.5),
-				(unsigned int)(reflections[reflection_index].amplitude + 0.5));
+				(unsigned int)((reflections[reflection_index].distance - sensor_offset) * 1000.0f + 0.5f),
+				(unsigned int)(reflections[reflection_index].amplitude + 0.5f));
 		if (count < 0) {
 			break;
 		}
@@ -323,4 +347,10 @@ void waitForEnter(void)
 {
 	fflush(stdout);
 	getchar();
+}
+
+void exit_handler(int sig_num)
+{
+	printf("\nCtrl+C pressed. %i Beginning shutdown\n", sig_num);
+	not_interrupted = 0;
 }
